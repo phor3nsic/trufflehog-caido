@@ -1,0 +1,102 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to publish (e.g. v0.1.0). Defaults to manifest version.'
+        required: false
+
+env:
+  NODE_VERSION: 20
+  PNPM_VERSION: 9
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build plugin package
+        run: pnpm build
+
+      - name: Sign plugin package (optional)
+        working-directory: dist
+        run: |
+          if [[ -z "${{ secrets.PRIVATE_KEY }}" ]]; then
+            echo "PRIVATE_KEY secret not set; skipping signature."
+          else
+            echo "${{ secrets.PRIVATE_KEY }}" > private_key.pem
+            openssl pkeyutl -sign -inkey private_key.pem -out plugin_package.zip.sig -rawin -in plugin_package.zip
+            rm private_key.pem
+            echo "Signature written to plugin_package.zip.sig"
+          fi
+
+      - name: Resolve release tag and version
+        id: meta
+        working-directory: dist
+        run: |
+          MANIFEST_VERSION=$(unzip -p plugin_package.zip manifest.json | jq -r .version)
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            TAG="${GITHUB_REF_NAME}"
+          elif [[ -n "${{ github.event.inputs.tag }}" ]]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="v${MANIFEST_VERSION}"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${MANIFEST_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Resolved tag=${TAG} (manifest version=${MANIFEST_VERSION})"
+
+      - name: Collect release artifacts
+        id: artifacts
+        working-directory: dist
+        run: |
+          if [[ -f plugin_package.zip.sig ]]; then
+            echo "files=dist/plugin_package.zip,dist/plugin_package.zip.sig" >> "$GITHUB_OUTPUT"
+          else
+            echo "files=dist/plugin_package.zip" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ steps.meta.outputs.tag }}
+          name: ${{ steps.meta.outputs.tag }}
+          commit: ${{ github.sha }}
+          artifacts: ${{ steps.artifacts.outputs.files }}
+          generateReleaseNotes: true
+          allowUpdates: true
+          body: |
+            TruffleHog Caido plugin **${{ steps.meta.outputs.version }}**.
+
+            ## Install
+
+            1. Download `plugin_package.zip` below.
+            2. In Caido, open **Plugins → Install Package** and select the file.
+            3. Open the **TruffleHog** sidebar entry and configure the binary
+               path on the **Settings** tab.
+
+            See the [README](https://github.com/${{ github.repository }}#readme)
+            for full documentation.

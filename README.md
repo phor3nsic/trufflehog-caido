@@ -23,6 +23,7 @@ Inspired by the
 - [Tunables and limits](#tunables-and-limits)
 - [Project structure](#project-structure)
 - [Development](#development)
+- [Releases](#releases)
 - [Troubleshooting](#troubleshooting)
 - [Security notes](#security-notes)
 - [Acknowledgements](#acknowledgements)
@@ -298,6 +299,58 @@ PrimeVue components (`Card`, `Tabs`, `Tag`, `Message`, `ToggleSwitch`,
 `Button`, `InputText`) styled with `bg-surface-*` / `text-surface-*` Tailwind
 tokens. User feedback uses `sdk.window.showToast` instead of custom status
 bars.
+
+---
+
+## Releases
+
+Two GitHub Actions workflows live in `.github/workflows/`:
+
+| Workflow        | Trigger                                                                 | What it does                                                                                                                            |
+| --------------- | ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `validate.yml`  | Every push and PR to `main`                                             | Runs `pnpm typecheck`, `pnpm lint`, and `pnpm build`. Uploads `plugin_package.zip` as a build artifact (kept 7 days).                   |
+| `release.yml`   | Push of a tag matching `v*`, or manual `workflow_dispatch`              | Builds, optionally signs the package, and publishes a GitHub Release with `plugin_package.zip` (and `.sig` if signing) attached.        |
+
+### Cutting a release
+
+```sh
+# 1. Bump the version in caido.config.ts (e.g. 0.1.0 → 0.2.0).
+# 2. Commit and push.
+git commit -am "Release v0.2.0"
+git push
+
+# 3. Tag and push the tag — this triggers the release workflow.
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+The workflow:
+
+1. Installs dependencies with `--frozen-lockfile`.
+2. Runs `pnpm build`, producing `dist/plugin_package.zip`.
+3. Reads the version from the bundled `manifest.json` for sanity.
+4. Optionally signs the zip with an ed25519 key (see below).
+5. Creates a GitHub Release named after the tag, with auto-generated release
+   notes and the package attached.
+
+You can also trigger it manually from the **Actions** tab via
+`workflow_dispatch`; if you don't pass a tag input, the release is named
+`v<manifest.version>`.
+
+### Optional package signing
+
+If you want signed packages, generate an ed25519 key and store the PEM as the
+repository secret `PRIVATE_KEY`:
+
+```sh
+openssl genpkey -algorithm ed25519 -out private_key.pem
+openssl pkey -in private_key.pem -pubout -out public_key.pem  # share this
+gh secret set PRIVATE_KEY < private_key.pem
+```
+
+When the secret is present the release workflow produces and attaches
+`plugin_package.zip.sig`. When it isn't, signing is skipped silently — the
+unsigned zip still ships.
 
 ---
 

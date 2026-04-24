@@ -12,7 +12,7 @@ export default defineConfig({
   id,
   name: "TruffleHog Caido",
   description: "TruffleHog passive scanner for Caido",
-  version: "0.0.0",
+  version: "0.1.0",
   author: {
     name: "DeepLook Labs",
     email: "contact@deeplooklabs.com",

@@ -8,7 +8,7 @@ originating request.
 Inspired by the
 [TruffleHog Burp Suite extension](https://github.com/trufflesecurity/trufflehog-burp-suite-extension).
 
-![](/assets/image.png)
+![](/assets/image.png?c=123323)
 
 ---
 
